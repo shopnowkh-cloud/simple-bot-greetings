@@ -1,6 +1,13 @@
 // Raw Telegram Bot API client via Lovable connector gateway
 const GATEWAY = 'https://connector-gateway.lovable.dev/telegram';
 
+function toArrayBuffer(b: Buffer | Uint8Array): ArrayBuffer {
+  const u8 = b instanceof Uint8Array ? b : new Uint8Array(b);
+  const out = new ArrayBuffer(u8.byteLength);
+  new Uint8Array(out).set(u8);
+  return out;
+}
+
 function headers(extra: Record<string, string> = {}) {
   const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
   const TELEGRAM_API_KEY = process.env.TELEGRAM_API_KEY;
@@ -70,8 +77,7 @@ export async function sendPhoto(chat_id: number | string, photo: Buffer | Uint8A
     form.append('parse_mode', 'HTML');
     if (opts.caption) form.append('caption', opts.caption);
     if (opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
-    const u8 = photo instanceof Uint8Array ? photo : new Uint8Array(photo);
-    form.append('photo', new Blob([u8], { type: 'image/png' }), 'qr.png');
+    form.append('photo', new Blob([toArrayBuffer(photo)], { type: 'image/png' }), 'qr.png');
     const res = await fetch(`${GATEWAY}/sendPhoto`, { method: 'POST', headers: headers(), body: form });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || (data as { ok?: boolean }).ok === false) {
@@ -91,8 +97,7 @@ export async function sendDocument(chat_id: number | string, buffer: Buffer | Ui
     form.append('chat_id', String(chat_id));
     form.append('parse_mode', 'HTML');
     if (caption) form.append('caption', caption);
-    const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-    form.append('document', new Blob([u8], { type: 'text/plain' }), filename);
+    form.append('document', new Blob([toArrayBuffer(buffer)], { type: 'text/plain' }), filename);
     const res = await fetch(`${GATEWAY}/sendDocument`, { method: 'POST', headers: headers(), body: form });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || (data as { ok?: boolean }).ok === false) {
