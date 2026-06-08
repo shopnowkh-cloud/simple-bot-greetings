@@ -65,10 +65,11 @@ async function notifyAdminNewUser(ctx: BotCtx, user: { id: number; first_name?: 
   };
   const full = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'N/A';
   const uname = user.username ? `@${user.username}` : '—';
-  await tg.sendMessage(
+  // fire-and-forget — don't block the user's reply on admin notification
+  tg.sendMessage(
     ctx.ADMIN_ID,
     `🆕 <b>អ្នកប្រើប្រាស់ថ្មី!</b>\n\n👤 ឈ្មោះ: ${esc(full)}\n🔖 Username: ${esc(uname)}\n🪪 ID: <code>${uid}</code>`,
-  );
+  ).catch(() => {});
 }
 
 async function showAccountSelection(ctx: BotCtx, chatId: number) {
@@ -193,9 +194,16 @@ async function deliverAccounts(ctx: BotCtx, chatId: number, userId: number, sess
 }
 
 // Run on each webhook and via cron — checks pending sessions.
-export async function runWatchdog(): Promise<void> {
-  const db = await loadDB();
-  const ctx = loadCtx(db);
+// Accepts an optional pre-loaded ctx to avoid a redundant DB roundtrip.
+export async function runWatchdog(preCtx?: BotCtx): Promise<void> {
+  let ctx: BotCtx;
+  if (preCtx) {
+    ctx = preCtx;
+  } else {
+    const db = await loadDB();
+    ctx = loadCtx(db);
+  }
+  const db = ctx.db;
   const pending = Object.entries(db.sessions).filter(([, s]) => s.state === 'payment_pending');
   if (!pending.length) return;
   let dirty = false;
@@ -498,8 +506,12 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
   }
 
   await saveDB(ctx.db);
-  // Run watchdog opportunistically after each update
-  runWatchdog().catch((e) => console.warn('[Watchdog] post-update:', (e as Error).message));
+  // Run watchdog only when there is a payment-pending session — avoids
+  // an extra DB roundtrip + Bakong network call on every update.
+  const hasPending = Object.values(ctx.db.sessions).some((s) => s.state === 'payment_pending');
+  if (hasPending) {
+    runWatchdog().catch((e) => console.warn('[Watchdog] post-update:', (e as Error).message));
+  }
 }
 
 async function handleMessage(ctx: BotCtx, msg: TgMsg) {
