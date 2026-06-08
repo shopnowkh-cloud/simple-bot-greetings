@@ -95,7 +95,8 @@ export async function loadDB(): Promise<BotDB> {
 export async function saveDB(db: BotDB): Promise<void> {
   const { error } = await supabaseAdmin
     .from('bot_state')
-    .upsert({ key: 'db', value: db as unknown as Record<string, unknown>, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .upsert({ key: 'db', value: db as any, updated_at: new Date().toISOString() }, { onConflict: 'key' });
   if (error) console.warn('[state] saveDB error:', error.message);
 }
 
