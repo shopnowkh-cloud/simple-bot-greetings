@@ -40,6 +40,13 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      // Expose CF executionCtx.waitUntil to request handlers (e.g. Telegram webhook)
+      // so they can ACK 200 immediately and continue background work.
+      const wu = (ctx as { waitUntil?: (p: Promise<unknown>) => void } | undefined)?.waitUntil;
+      if (typeof wu === 'function') {
+        (globalThis as unknown as { __waitUntil?: (p: Promise<unknown>) => void }).__waitUntil =
+          wu.bind(ctx);
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

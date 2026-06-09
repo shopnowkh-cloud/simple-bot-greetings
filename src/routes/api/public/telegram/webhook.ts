@@ -34,17 +34,30 @@ export const Route = createFileRoute('/api/public/telegram/webhook')({
         if (typeof update.update_id !== 'number') {
           return Response.json({ ok: true, ignored: true });
         }
-        // Parallelize dedup insert + DB load to shave one network roundtrip
-        const [fresh, db] = await Promise.all([
-          markUpdateProcessed(update.update_id),
-          loadDB(),
-        ]);
-        if (!fresh) return Response.json({ ok: true, duplicate: true });
-        try {
-          await handleUpdate(update as Parameters<typeof handleUpdate>[0], db);
-        } catch (e) {
-          console.warn('[webhook] handleUpdate error:', (e as Error).message);
+        // ACK Telegram immediately, process in background via CF waitUntil.
+        // Telegram considers the update delivered as soon as we return 200,
+        // so it can send the next update without waiting for our DB/work.
+        const work = (async () => {
+          try {
+            const [fresh, db] = await Promise.all([
+              markUpdateProcessed(update.update_id!),
+              loadDB(),
+            ]);
+            if (!fresh) return;
+            await handleUpdate(update as Parameters<typeof handleUpdate>[0], db);
+          } catch (e) {
+            console.warn('[webhook] bg error:', (e as Error).message);
+          }
+        })();
+        const wu = (globalThis as unknown as {
+          __waitUntil?: (p: Promise<unknown>) => void;
+        }).__waitUntil;
+        if (wu) {
+          wu(work);
+          return Response.json({ ok: true });
         }
+        // Fallback (no waitUntil — e.g. local dev): await before responding.
+        await work;
         return Response.json({ ok: true });
       },
     },
