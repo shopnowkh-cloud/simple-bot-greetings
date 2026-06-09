@@ -178,9 +178,9 @@ async function deliverAccounts(ctx: BotCtx, chatId: number, userId: number, sess
       `📝 <b>ចំណាំ:</b> ${esc(memo)}\n` +
       `🧾 <b>លេខយោង:</b> <code>${esc(ref)}</code>\n` +
       `⏰ <b>ម៉ោង:</b> ${nowKH()}`;
-    await tg.sendMessage(ctx.ADMIN_ID, adminMsg);
+    tg.sendMessage(ctx.ADMIN_ID, adminMsg).catch(() => {});
     if (ctx.CHANNEL_ID && String(ctx.CHANNEL_ID) !== String(ctx.ADMIN_ID)) {
-      await tg.sendMessage(ctx.CHANNEL_ID, adminMsg).catch(() => {});
+      tg.sendMessage(ctx.CHANNEL_ID, adminMsg).catch(() => {});
     }
   } catch (e) {
     console.warn('[WARN] admin payment notify:', (e as Error).message);
