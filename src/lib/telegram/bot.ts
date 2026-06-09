@@ -101,10 +101,9 @@ async function startPaymentForSession(ctx: BotCtx, chatId: number, userId: numbe
     delete ctx.db.sessions[String(userId)];
     return false;
   }
-  const reserved = pool.slice(0, qty);
-  ctx.db.accounts.account_types[at] = pool.slice(qty);
-  session.reserved_accounts = reserved;
-  session.available_count = ctx.db.accounts.account_types[at].length;
+  // No reservation — coupons stay in stock until payment confirmed
+  session.reserved_accounts = [];
+  session.available_count = pool.length;
   if (cbId) await tg.answerCallbackQuery(cbId, 'កំពុងបង្កើត QR...');
 
   session.state = 'payment_pending';
@@ -116,7 +115,6 @@ async function startPaymentForSession(ctx: BotCtx, chatId: number, userId: numbe
       await tg.sendMessage(chatId, '❌ <b>មានបញ្ហាក្នុងការបង្កើត QR Code</b>\n\nសូមព្យាយាមម្ដងទៀត។');
       await tg.sendMessage(ctx.ADMIN_ID, `⚠️ QR Error (user ${userId}): <code>${esc(String(error))}</code>`);
     }
-    ctx.db.accounts.account_types[at] = [...reserved, ...(ctx.db.accounts.account_types[at] ?? [])];
     delete ctx.db.sessions[String(userId)];
     return false;
   }
@@ -136,15 +134,12 @@ async function startPaymentForSession(ctx: BotCtx, chatId: number, userId: numbe
 async function deliverAccounts(ctx: BotCtx, chatId: number, userId: number, session: Session, paymentData: Record<string, unknown> | null = null) {
   const at = session.account_type!;
   const qty = session.quantity!;
-  const reserved = session.reserved_accounts ?? [];
   for (const k of ['photo_message_id', 'qr_message_id'] as const) {
     const mid = session[k];
     if (mid) tg.deleteMessage(chatId, mid).catch(() => {});
   }
   let delivered: Account[] | null = null;
-  if (reserved.length >= qty) {
-    delivered = reserved.slice(0, qty);
-  } else if ((ctx.db.accounts.account_types[at] ?? []).length >= qty) {
+  if ((ctx.db.accounts.account_types[at] ?? []).length >= qty) {
     const pool = ctx.db.accounts.account_types[at];
     delivered = pool.slice(0, qty);
     ctx.db.accounts.account_types[at] = pool.slice(qty);
