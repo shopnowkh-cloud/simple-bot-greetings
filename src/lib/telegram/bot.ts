@@ -484,8 +484,8 @@ interface TgUpdate {
   channel_post?: TgMsg;
 }
 
-export async function handleUpdate(update: TgUpdate): Promise<void> {
-  const db = await loadDB();
+export async function handleUpdate(update: TgUpdate, preDb?: BotDB): Promise<void> {
+  const db = preDb ?? (await loadDB());
   const ctx = loadCtx(db);
 
   try {
@@ -500,13 +500,14 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     console.warn('[BotError]', (e as Error).message);
   }
 
-  await saveDB(ctx.db);
+  const savePromise = saveDB(ctx.db);
   // Run watchdog only when there is a payment-pending session — avoids
   // an extra DB roundtrip + Bakong network call on every update.
   const hasPending = Object.values(ctx.db.sessions).some((s) => s.state === 'payment_pending');
   if (hasPending) {
     runWatchdog().catch((e) => console.warn('[Watchdog] post-update:', (e as Error).message));
   }
+  await savePromise;
 }
 
 async function handleMessage(ctx: BotCtx, msg: TgMsg) {
