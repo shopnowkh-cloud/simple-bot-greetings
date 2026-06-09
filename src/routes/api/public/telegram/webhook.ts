@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createHash, timingSafeEqual } from 'crypto';
 import { handleUpdate } from '@/lib/telegram/bot';
-import { markUpdateProcessed } from '@/lib/telegram/state';
+import { markUpdateProcessed, loadDB } from '@/lib/telegram/state';
 
 function deriveSecret(apiKey: string): string {
   return createHash('sha256').update(`telegram-webhook:${apiKey}`).digest('base64url');
@@ -34,10 +34,14 @@ export const Route = createFileRoute('/api/public/telegram/webhook')({
         if (typeof update.update_id !== 'number') {
           return Response.json({ ok: true, ignored: true });
         }
-        const fresh = await markUpdateProcessed(update.update_id);
+        // Parallelize dedup insert + DB load to shave one network roundtrip
+        const [fresh, db] = await Promise.all([
+          markUpdateProcessed(update.update_id),
+          loadDB(),
+        ]);
         if (!fresh) return Response.json({ ok: true, duplicate: true });
         try {
-          await handleUpdate(update as Parameters<typeof handleUpdate>[0]);
+          await handleUpdate(update as Parameters<typeof handleUpdate>[0], db);
         } catch (e) {
           console.warn('[webhook] handleUpdate error:', (e as Error).message);
         }
