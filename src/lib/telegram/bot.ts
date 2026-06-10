@@ -101,9 +101,11 @@ async function startPaymentForSession(ctx: BotCtx, chatId: number, userId: numbe
     delete ctx.db.sessions[String(userId)];
     return false;
   }
-  // No reservation — coupons stay in stock until payment confirmed
-  session.reserved_accounts = [];
-  session.available_count = pool.length;
+  // Reserve coupons for this session so they're removed from stock
+  // while payment is pending. Returned to pool on timeout/cancel.
+  session.reserved_accounts = pool.slice(0, qty);
+  ctx.db.accounts.account_types[at] = pool.slice(qty);
+  session.available_count = ctx.db.accounts.account_types[at].length;
   if (cbId) await tg.answerCallbackQuery(cbId, 'កំពុងបង្កើត QR...');
 
   session.state = 'payment_pending';
@@ -139,11 +141,15 @@ async function deliverAccounts(ctx: BotCtx, chatId: number, userId: number, sess
     if (mid) tg.deleteMessage(chatId, mid).catch(() => {});
   }
   let delivered: Account[] | null = null;
-  if ((ctx.db.accounts.account_types[at] ?? []).length >= qty) {
+  const reserved = session.reserved_accounts ?? [];
+  if (reserved.length >= qty) {
+    delivered = reserved.slice(0, qty);
+  } else if ((ctx.db.accounts.account_types[at] ?? []).length >= qty) {
     const pool = ctx.db.accounts.account_types[at];
     delivered = pool.slice(0, qty);
     ctx.db.accounts.account_types[at] = pool.slice(qty);
   }
+  session.reserved_accounts = [];
   delete ctx.db.sessions[String(userId)];
   if (!delivered) {
     await tg.sendMessage(chatId, `❌ <b>មានបញ្ហា!</b>\n\nគ្មាន គូប៉ុង ប្រភេទ ${esc(at)} ក្នុងស្តុក។`);
