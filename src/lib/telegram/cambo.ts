@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 
-const CAMBO_BASE = 'https://bakong.cambo-kh.com/api/v1';
+const CAMBO_BASE = 'https://bakong.cambo-kh.com/api/v2';
 
 async function camboRequest(
   token: string,
