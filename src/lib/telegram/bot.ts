@@ -312,7 +312,7 @@ async function sendKhpayInfo(ctx: BotCtx, chatId: number) {
   const short = token ? `<code>${esc(token.slice(0, 16))}…${esc(token.slice(-4))}</code>` : '❌ មិនទាន់កំណត់';
   const lines = [
     '💰 <b>Cambo Payment Info</b>', '━━━━━━━━━━━━━━━━━━━',
-    '🌐 <b>API:</b> <code>bakong.cambo-kh.com</code>',
+    '🌐 <b>API:</b> <code>bakong.cambo-kh.com/api/v2</code>',
     `🔑 <b>Token:</b> ${short}`,
     '━━━━━━━━━━━━━━━━━━━',
     '✅ <b>Generate QR:</b> type=generate_qr',
