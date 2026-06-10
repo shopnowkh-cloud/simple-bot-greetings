@@ -66,6 +66,16 @@ export function deleteMessage(chat_id: number | string, message_id: number) {
   return call('deleteMessage', { chat_id, message_id });
 }
 
+export function editMessageText(chat_id: number | string, message_id: number, text: string, reply_markup?: { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> }) {
+  return call<TgMessage>('editMessageText', {
+    chat_id,
+    message_id,
+    text,
+    parse_mode: 'HTML',
+    ...(reply_markup ? { reply_markup } : {}),
+  });
+}
+
 export function answerCallbackQuery(callback_query_id: string, text?: string, show_alert = false) {
   return call('answerCallbackQuery', { callback_query_id, ...(text ? { text } : {}), show_alert });
 }
