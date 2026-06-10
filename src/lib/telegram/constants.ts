@@ -64,7 +64,7 @@ export const CHECK_PAYMENT_INLINE: ReplyMarkup = {
   ]],
 };
 
-export const PAYMENT_TIMEOUT_SEC = 60;
+export const PAYMENT_TIMEOUT_SEC = 120;
 
 // Helpers
 export const esc = (s: unknown) =>
