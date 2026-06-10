@@ -721,8 +721,11 @@ async function handleCallback(ctx: BotCtx, cb: TgCallbackQuery) {
     const rows: Array<Array<{ text: string; callback_data: string }>> = [];
     for (let i = 0; i < qtyBtns.length; i += 5) rows.push(qtyBtns.slice(i, i + 5));
     rows.push([{ text: '🚫 បោះបង់', callback_data: 'cancel_buy' }]);
-    await tg.sendMessage(chatId, '<b>សូមជ្រើសរើសចំនួនដែលចង់ទិញ៖</b>', { inline_keyboard: rows });
-    if (msgId) tg.deleteMessage(chatId, msgId).catch(() => {});
+    if (msgId) {
+      await tg.editMessageText(chatId, msgId, `<b>សូមជ្រើសរើសចំនួនដែលចង់ទិញ៖</b>\n\nប្រភេទ៖ ${esc(at)} – តម្លៃ $${price} ក្នុងមួយ`, { inline_keyboard: rows });
+    } else {
+      await tg.sendMessage(chatId, '<b>សូមជ្រើសរើសចំនួនដែលចង់ទិញ៖</b>', { inline_keyboard: rows });
+    }
     return;
   }
 
