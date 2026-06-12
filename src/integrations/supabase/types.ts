@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          telegram_id: number
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          telegram_id: number
+          token: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          telegram_id?: number
+          token?: string
+        }
+        Relationships: []
+      }
       bot_state: {
         Row: {
           key: string
