@@ -32,17 +32,20 @@ async function auth(token: string): Promise<AuthResult> {
   return { telegramId: tid, isPrimary: tid === primary };
 }
 
+type AccountShape = { phone?: string; password?: string; code?: string; email?: string };
+type PurchaseShape = { user_id: number; account_type: string; quantity: number; total_price: number; accounts: AccountShape[]; purchased_at: string };
+
 async function loadFullDB() {
   const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
   const { data } = await supabaseAdmin
     .from('bot_state').select('value').eq('key', 'db').maybeSingle();
   const v = (data?.value ?? {}) as Record<string, unknown>;
   return {
-    accounts: (v.accounts as { account_types: Record<string, unknown[]>; prices: Record<string, number> }) ?? { account_types: {}, prices: {} },
+    accounts: (v.accounts as { account_types: Record<string, AccountShape[]>; prices: Record<string, number> }) ?? { account_types: {}, prices: {} },
     sessions: (v.sessions as Record<string, unknown>) ?? {},
     settings: (v.settings as Record<string, string>) ?? {},
     users: (v.users as Record<string, { first_name: string; last_name: string; username: string; first_seen: string }>) ?? {},
-    purchases: (v.purchases as Array<{ user_id: number; account_type: string; quantity: number; total_price: number; accounts: unknown[]; purchased_at: string }>) ?? [],
+    purchases: (v.purchases as PurchaseShape[]) ?? [],
   };
 }
 
@@ -116,13 +119,11 @@ export const addCoupons = createServerFn({ method: 'POST' })
       throw new Error(`Type "${type}" already has price $${existing}. Use the same price.`);
     }
     const all = new Set(
-      Object.values(db.accounts.account_types).flat().map((a) => {
-        const o = a as { code?: string; email?: string; phone?: string };
-        return (o.code || o.email || o.phone || '').toLowerCase();
-      }).filter(Boolean),
+      Object.values(db.accounts.account_types).flat().map((a) =>
+        (a.code || a.email || a.phone || '').toLowerCase(),
+      ).filter(Boolean),
     );
-    type Acc = { phone?: string; password?: string; code?: string };
-    const accounts: Acc[] = lines.map((l) => {
+    const accounts: AccountShape[] = lines.map((l) => {
       if (l.includes('|')) {
         const [ph, pw] = l.split('|').map((s) => s.trim());
         return { phone: ph, password: pw };
@@ -131,7 +132,7 @@ export const addCoupons = createServerFn({ method: 'POST' })
     });
     const toAdd = accounts.filter((a) => !all.has((a.code || a.phone || '').toLowerCase()));
     if (!db.accounts.account_types[type]) db.accounts.account_types[type] = [];
-    (db.accounts.account_types[type] as Acc[]).push(...toAdd);
+    db.accounts.account_types[type].push(...toAdd);
     db.accounts.prices[type] = price;
     await saveFullDB(db);
     return { added: toAdd.length, duplicates: accounts.length - toAdd.length };
@@ -154,7 +155,7 @@ export const deleteOneCoupon = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await auth(data.token);
     const db = await loadFullDB();
-    const list = db.accounts.account_types[data.type] as unknown[] | undefined;
+    const list = db.accounts.account_types[data.type];
     if (!list) throw new Error('Type not found');
     if (data.index < 0 || data.index >= list.length) throw new Error('Index out of range');
     list.splice(data.index, 1);
@@ -167,7 +168,7 @@ export const listCoupons = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     await auth(data.token);
     const db = await loadFullDB();
-    const list = (db.accounts.account_types[data.type] as Array<{ code?: string; email?: string; phone?: string; password?: string }> | undefined) ?? [];
+    const list = db.accounts.account_types[data.type] ?? [];
     return { items: list };
   });
 
