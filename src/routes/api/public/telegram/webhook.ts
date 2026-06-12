@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createHash, timingSafeEqual } from 'crypto';
-import { handleUpdate } from '@/lib/telegram/bot';
+import { handleUpdate, runWatchdog } from '@/lib/telegram/bot';
 import { markUpdateProcessed, loadDB } from '@/lib/telegram/state';
 
 function deriveSecret(apiKey: string): string {
@@ -45,6 +45,8 @@ export const Route = createFileRoute('/api/public/telegram/webhook')({
             ]);
             if (!fresh) return;
             await handleUpdate(update as Parameters<typeof handleUpdate>[0], db);
+            // Opportunistic: kick payment watchdog on every update for instant delivery
+            runWatchdog().catch(() => {});
           } catch (e) {
             console.warn('[webhook] bg error:', (e as Error).message);
           }
