@@ -4,7 +4,7 @@ import { runWatchdog } from '@/lib/telegram/bot';
 // Driven by pg_cron every minute. Loops internally for ~55s (every 5s)
 // so MD5 payment checks happen near-real-time without depending on
 // external cron frequency.
-async function runLoop(maxMs = 59_000, intervalMs = 1_000) {
+async function runLoop(maxMs = 59_000, intervalMs = 500) {
   const start = Date.now();
   let runs = 0;
   while (Date.now() - start < maxMs) {
