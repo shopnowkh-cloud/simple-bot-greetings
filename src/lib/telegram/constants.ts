@@ -24,8 +24,6 @@ export const BTN_DELETE_CONFIRM    = '✅ បញ្ជាក់លុប';
 export const BTN_DELETE_CANCEL     = '🚫 បោះបង់ការលុប';
 export const BTN_BROADCAST_CONFIRM = '✅ បញ្ជាក់ផ្សាយ';
 export const BTN_BROADCAST_CANCEL  = '🚫 បោះបង់ការផ្សាយ';
-export const ADMIN_SETTINGS_BTN    = '⚙️កំណត់';
-
 export const ADMIN_BUTTON_LABELS = new Set<string>([
   BTN_ADD_ACCOUNT, BTN_DELETE_TYPE, BTN_STOCK, BTN_USERS, BTN_BUYERS,
   BTN_KHPAY, BTN_CHANNEL, BTN_ADMINS, BTN_MAINTENANCE, BTN_BROADCAST,
@@ -33,13 +31,11 @@ export const ADMIN_BUTTON_LABELS = new Set<string>([
   BTN_CHANNEL_EDIT, BTN_CHANNEL_CLEAR, BTN_ADMIN_ADD, BTN_ADMIN_REMOVE,
   BTN_MAINT_ON, BTN_MAINT_OFF, BTN_CANCEL_INPUT,
   BTN_DELETE_CONFIRM, BTN_DELETE_CANCEL, BTN_BROADCAST_CONFIRM, BTN_BROADCAST_CANCEL,
-  ADMIN_SETTINGS_BTN,
 ]);
 
 const kb = (rows: string[][]): ReplyMarkup => ({ keyboard: rows, resize_keyboard: true, is_persistent: true });
 
 export const MAIN_KB: ReplyMarkup            = kb([['💵 ទិញគូប៉ុង']]);
-export const ADMIN_KB: ReplyMarkup           = kb([[ADMIN_SETTINGS_BTN]]);
 export const ADMIN_SETTINGS_KB: ReplyMarkup  = kb([
   [BTN_ADD_ACCOUNT, BTN_DELETE_TYPE],
   [BTN_STOCK,       BTN_BUYERS],

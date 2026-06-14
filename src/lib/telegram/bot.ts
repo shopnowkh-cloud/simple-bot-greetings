@@ -3,7 +3,7 @@ import { loadDB, saveDB, type BotDB, type Session, type Account } from './state'
 import * as tg from './api';
 import { createKhpayPayment, checkKhpayStatus } from './cambo';
 import {
-  ADMIN_BUTTON_LABELS, ADMIN_KB, ADMIN_SETTINGS_BTN, ADMIN_SETTINGS_KB,
+  ADMIN_BUTTON_LABELS, ADMIN_SETTINGS_KB,
   ADMINS_SUBMENU_KB, ADD_ACCOUNT_KB, BACK_SETTINGS_KB, BROADCAST_CONFIRM_KB,
   BTN_ADD_ACCOUNT, BTN_ADMINS, BTN_ADMIN_ADD, BTN_ADMIN_REMOVE,
   BTN_BACK_SETTINGS, BTN_BROADCAST, BTN_BROADCAST_CANCEL, BTN_BROADCAST_CONFIRM,
@@ -48,11 +48,8 @@ const isAdmin = (ctx: BotCtx, uid: number) =>
   Number(uid) === ctx.ADMIN_ID || ctx.EXTRA_ADMIN_IDS.has(Number(uid));
 
 async function buildAdminKb(_uid: number): Promise<ReplyMarkup> {
-  const base = process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
-  const url = `${base}/admin`;
   return {
     keyboard: [
-      [{ text: ADMIN_SETTINGS_BTN, web_app: { url } }],
       [BTN_ADD_ACCOUNT, BTN_DELETE_TYPE],
       [BTN_STOCK,       BTN_BUYERS],
       [BTN_USERS,       BTN_KHPAY],
@@ -546,7 +543,7 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   if (text === '/admin') {
     if (!isAdmin(ctx, uid)) return;
     delete ctx.db.sessions[String(uid)];
-    return tg.sendMessage(chatId, '⚙️ <b>Admin Dashboard</b>\n\nចុចប៊ូតុងខាងក្រោមដើម្បីបើក Dashboard ។', await mainKb(ctx, uid));
+    return tg.sendMessage(chatId, '⚙️ <b>Admin Dashboard</b>', await mainKb(ctx, uid));
   }
 
   // /start
@@ -562,7 +559,7 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
     }
     delete ctx.db.sessions[String(uid)];
     if (isAdmin(ctx, uid)) {
-      await tg.sendMessage(chatId, '👋 <b>សួស្ដី Admin</b>\n\nចុចប៊ូតុង <b>⚙️កំណត់</b> ដើម្បីបើក Mini App Dashboard។', await mainKb(ctx, uid));
+      await tg.sendMessage(chatId, '👋 <b>សួស្ដី Admin</b>', await mainKb(ctx, uid));
     }
     await showAccountSelection(ctx, chatId);
     return;
