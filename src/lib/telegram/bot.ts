@@ -568,7 +568,18 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   if (text === ADMIN_SETTINGS_BTN && isAdmin(ctx, uid)) {
     const sess = ctx.db.sessions[String(uid)] ?? {};
     if (String(sess.state || '').startsWith('admin_input:')) delete ctx.db.sessions[String(uid)];
-    return sendAdminSettingsMenu(ctx, chatId);
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(16).padStart(2, '0')).join('');
+    await supabaseAdmin.from('admin_tokens').insert({ token, telegram_id: uid });
+    const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
+    const url = `${base}/admin?token=${token}`;
+    await tg.sendMessage(
+      chatId,
+      '⚙️ <b>បើក Admin Dashboard</b>\n\nចុចប៊ូតុងខាងក្រោមដើម្បីបើក Mini App៖',
+      { inline_keyboard: [[{ text: '🖥 បើក Dashboard', web_app: { url } }]] },
+    );
+    return;
   }
 
   if (isAdmin(ctx, uid)) {
