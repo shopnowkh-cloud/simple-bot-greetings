@@ -538,26 +538,6 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   const text = (msg.text ?? '').trim();
   await notifyAdminNewUser(ctx, msg.from);
 
-  // /admin — issue a magic link to the dashboard mini app (admin only)
-  if (text === '/admin' || text.startsWith('/admin ')) {
-    if (!isAdmin(ctx, uid)) {
-      await tg.sendMessage(chatId, '⛔ <b>Admin only</b>');
-      return;
-    }
-    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map((b) => b.toString(16).padStart(2, '0')).join('');
-    await supabaseAdmin.from('admin_tokens').insert({ token, telegram_id: uid });
-    const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
-    const url = `${base}/admin?token=${token}`;
-    await tg.sendMessage(
-      chatId,
-      `🔐 <b>Admin Dashboard</b>\n\nចុចលីង​ខាងក្រោម​ដើម្បី​ចូល (មាន​សុពលភាព 7 ថ្ងៃ)៖\n\n${esc(url)}`,
-      { inline_keyboard: [[{ text: '🖥 បើក Dashboard', url }]] },
-    );
-    return;
-  }
-
   // /start
   if (text === '/start' || text.startsWith('/start ')) {
     if (ctx.MAINTENANCE_MODE && !isAdmin(ctx, uid)) {
@@ -579,23 +559,6 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
     return;
   }
 
-  // Admin settings entry
-  if (text === ADMIN_SETTINGS_BTN && isAdmin(ctx, uid)) {
-    const sess = ctx.db.sessions[String(uid)] ?? {};
-    if (String(sess.state || '').startsWith('admin_input:')) delete ctx.db.sessions[String(uid)];
-    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map((b) => b.toString(16).padStart(2, '0')).join('');
-    await supabaseAdmin.from('admin_tokens').insert({ token, telegram_id: uid });
-    const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
-    const url = `${base}/admin?token=${token}`;
-    await tg.sendMessage(
-      chatId,
-      '⚙️ <b>បើក Admin Dashboard</b>\n\nចុចប៊ូតុងខាងក្រោមដើម្បីបើក Mini App៖',
-      { inline_keyboard: [[{ text: '🖥 បើក Dashboard', web_app: { url } }]] },
-    );
-    return;
-  }
 
   if (isAdmin(ctx, uid)) {
     const sess = ctx.db.sessions[String(uid)] ?? {};
