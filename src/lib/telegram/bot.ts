@@ -46,8 +46,23 @@ function loadCtx(db: BotDB): BotCtx {
 const isAdmin = (ctx: BotCtx, uid: number) =>
   Number(uid) === ctx.ADMIN_ID || ctx.EXTRA_ADMIN_IDS.has(Number(uid));
 
-const mainKb = (ctx: BotCtx, uid: number): ReplyMarkup =>
-  isAdmin(ctx, uid) ? ADMIN_KB : REMOVE_KB;
+async function buildAdminKb(uid: number): Promise<ReplyMarkup> {
+  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+    .map((b) => b.toString(16).padStart(2, '0')).join('');
+  await supabaseAdmin.from('admin_tokens').insert({ token, telegram_id: uid });
+  const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
+  const url = `${base}/admin?token=${token}`;
+  return {
+    keyboard: [[{ text: ADMIN_SETTINGS_BTN, web_app: { url } }]],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
+async function mainKb(ctx: BotCtx, uid: number): Promise<ReplyMarkup> {
+  return isAdmin(ctx, uid) ? await buildAdminKb(uid) : REMOVE_KB;
+}
 
 const typeFromCbId = (ctx: BotCtx, cid: string) =>
   Object.keys(ctx.db.accounts.account_types).find((t) => typeCallbackId(t) === cid) ?? null;
@@ -167,7 +182,7 @@ async function deliverAccounts(ctx: BotCtx, chatId: number, userId: number, sess
     const acc = delivered[i];
     const isLast = i === delivered.length - 1;
     const msg = `🎉 <b>ការទិញបានបញ្ជាក់ដោយជោគជ័យ</b>\n\nគូប៉ុងរបស់អ្នក៖ 👇\n\n<code>${esc(formatAccount(acc))}</code>\n\n<i>សូមអរគុណសម្រាប់ការទិញ 🙏</i>`;
-    await tg.sendMessage(chatId, msg, isLast ? mainKb(ctx, userId) : undefined);
+    await tg.sendMessage(chatId, msg, isLast ? await mainKb(ctx, userId) : undefined);
   }
   try {
     const pd = paymentData || {};
@@ -428,7 +443,7 @@ async function handleAdminInput(ctx: BotCtx, chatId: number, uid: number, msgId:
     ctx.db.settings.CAMBO_API_TOKEN = text; ctx.CAMBO_API_TOKEN = text;
     delete ctx.db.sessions[String(uid)];
     tg.deleteMessage(chatId, msgId).catch(() => {});
-    return tg.sendMessage(chatId, `✅ បានប្តូរ <b>Cambo API Token</b>\n<code>${esc(text.slice(0, 12))}…${esc(text.slice(-4))}</code>`, mainKb(ctx, uid));
+    return tg.sendMessage(chatId, `✅ បានប្តូរ <b>Cambo API Token</b>\n<code>${esc(text.slice(0, 12))}…${esc(text.slice(-4))}</code>`, await mainKb(ctx, uid));
   }
 
   if (key === 'channel') {
@@ -439,7 +454,7 @@ async function handleAdminInput(ctx: BotCtx, chatId: number, uid: number, msgId:
       ctx.db.settings.TELEGRAM_CHANNEL_ID = text; ctx.CHANNEL_ID = text;
     }
     delete ctx.db.sessions[String(uid)];
-    return tg.sendMessage(chatId, `✅ បានកំណត់ Channel ID ទៅជា <code>${esc(ctx.CHANNEL_ID || '(ទទេ)')}</code>`, mainKb(ctx, uid));
+    return tg.sendMessage(chatId, `✅ បានកំណត់ Channel ID ទៅជា <code>${esc(ctx.CHANNEL_ID || '(ទទេ)')}</code>`, await mainKb(ctx, uid));
   }
 
   if (key === 'admin_add') {
@@ -447,7 +462,7 @@ async function handleAdminInput(ctx: BotCtx, chatId: number, uid: number, msgId:
     if (isNaN(target)) return tg.sendMessage(chatId, '❌ user_id ត្រូវតែជាលេខ (ឬចុច 🚫 បោះបង់)');
     if (target === ctx.ADMIN_ID) {
       delete ctx.db.sessions[String(uid)];
-      return tg.sendMessage(chatId, 'ℹ️ Admin បឋមមិនអាចលុប/បន្ថែមបានទេ។', mainKb(ctx, uid));
+      return tg.sendMessage(chatId, 'ℹ️ Admin បឋមមិនអាចលុប/បន្ថែមបានទេ។', await mainKb(ctx, uid));
     }
     ctx.EXTRA_ADMIN_IDS.add(target);
     ctx.db.settings.EXTRA_ADMIN_IDS = JSON.stringify([...ctx.EXTRA_ADMIN_IDS]);
