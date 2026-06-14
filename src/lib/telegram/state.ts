@@ -1,5 +1,5 @@
 // Bot state — single JSON document stored in public.bot_state (key = 'db')
-import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { query } from '@/lib/db.server';
 
 export interface Account {
   email?: string;
@@ -69,45 +69,51 @@ const EMPTY: BotDB = {
 };
 
 export async function loadDB(): Promise<BotDB> {
-  const { data, error } = await supabaseAdmin
-    .from('bot_state')
-    .select('value')
-    .eq('key', 'db')
-    .maybeSingle();
-  if (error) {
-    console.warn('[state] loadDB error:', error.message);
+  try {
+    const result = await query<{ value: unknown }>(
+      "SELECT value FROM bot_state WHERE key = 'db' LIMIT 1",
+    );
+    if (!result.rows.length) return structuredClone(EMPTY);
+    const v = (result.rows[0].value ?? {}) as Partial<BotDB>;
+    return {
+      accounts: {
+        account_types: v.accounts?.account_types ?? {},
+        prices: v.accounts?.prices ?? {},
+      },
+      sessions: v.sessions ?? {},
+      settings: v.settings ?? {},
+      users: v.users ?? {},
+      purchases: v.purchases ?? [],
+    };
+  } catch (e) {
+    console.warn('[state] loadDB error:', (e as Error).message);
     return structuredClone(EMPTY);
   }
-  if (!data) return structuredClone(EMPTY);
-  const v = (data.value ?? {}) as Partial<BotDB>;
-  return {
-    accounts: {
-      account_types: v.accounts?.account_types ?? {},
-      prices: v.accounts?.prices ?? {},
-    },
-    sessions: v.sessions ?? {},
-    settings: v.settings ?? {},
-    users: v.users ?? {},
-    purchases: v.purchases ?? [],
-  };
 }
 
 export async function saveDB(db: BotDB): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('bot_state')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .upsert({ key: 'db', value: db as any, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-  if (error) console.warn('[state] saveDB error:', error.message);
+  try {
+    await query(
+      `INSERT INTO bot_state (key, value, updated_at)
+       VALUES ('db', $1::jsonb, now())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [JSON.stringify(db)],
+    );
+  } catch (e) {
+    console.warn('[state] saveDB error:', (e as Error).message);
+  }
 }
 
 // Idempotency: returns true if this update_id is new (and was inserted), false if already processed.
 export async function markUpdateProcessed(updateId: number): Promise<boolean> {
-  const { error } = await supabaseAdmin
-    .from('telegram_updates')
-    .insert({ update_id: updateId });
-  if (error) {
+  try {
+    await query(
+      'INSERT INTO telegram_updates (update_id) VALUES ($1)',
+      [updateId],
+    );
+    return true;
+  } catch {
     // duplicate key — already processed
     return false;
   }
-  return true;
 }

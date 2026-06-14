@@ -16,6 +16,7 @@ import {
   shortLabel, typeCallbackId,
 } from './constants';
 import type { ReplyMarkup } from './api';
+import { query } from '@/lib/db.server';
 
 // ============= Context loaded per-request =============
 
@@ -47,11 +48,13 @@ const isAdmin = (ctx: BotCtx, uid: number) =>
   Number(uid) === ctx.ADMIN_ID || ctx.EXTRA_ADMIN_IDS.has(Number(uid));
 
 async function buildAdminKb(uid: number): Promise<ReplyMarkup> {
-  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
   const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
     .map((b) => b.toString(16).padStart(2, '0')).join('');
-  await supabaseAdmin.from('admin_tokens').insert({ token, telegram_id: uid });
-  const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
+  await query(
+    'INSERT INTO admin_tokens (token, telegram_id) VALUES ($1, $2)',
+    [token, uid],
+  );
+  const base = process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
   const url = `${base}/admin?token=${token}`;
   return {
     keyboard: [
@@ -568,7 +571,6 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
     await tg.sendMessage(chatId, '🔧 <b>Bot កំពុង Update សូមរង់ចាំមួយភ្លែត...</b>');
     return;
   }
-
 
   if (isAdmin(ctx, uid)) {
     const sess = ctx.db.sessions[String(uid)] ?? {};

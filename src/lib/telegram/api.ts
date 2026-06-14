@@ -1,5 +1,11 @@
-// Raw Telegram Bot API client via Lovable connector gateway
-const GATEWAY = 'https://connector-gateway.lovable.dev/telegram';
+// Raw Telegram Bot API client — direct calls to api.telegram.org
+const TELEGRAM_API_BASE = 'https://api.telegram.org';
+
+function getBotToken(): string {
+  const token = process.env.TELEGRAM_API_KEY;
+  if (!token) throw new Error('TELEGRAM_API_KEY is not configured');
+  return token;
+}
 
 function toArrayBuffer(b: Buffer | Uint8Array): ArrayBuffer {
   const u8 = b instanceof Uint8Array ? b : new Uint8Array(b);
@@ -8,23 +14,12 @@ function toArrayBuffer(b: Buffer | Uint8Array): ArrayBuffer {
   return out;
 }
 
-function headers(extra: Record<string, string> = {}) {
-  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
-  const TELEGRAM_API_KEY = process.env.TELEGRAM_API_KEY;
-  if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
-  if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
-  return {
-    Authorization: `Bearer ${LOVABLE_API_KEY}`,
-    'X-Connection-Api-Key': TELEGRAM_API_KEY,
-    ...extra,
-  };
-}
-
 async function call<T = unknown>(method: string, payload: Record<string, unknown>): Promise<T | null> {
   try {
-    const res = await fetch(`${GATEWAY}/${method}`, {
+    const token = getBotToken();
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/${method}`, {
       method: 'POST',
-      headers: headers({ 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -82,13 +77,14 @@ export function answerCallbackQuery(callback_query_id: string, text?: string, sh
 
 export async function sendPhoto(chat_id: number | string, photo: Buffer | Uint8Array, opts: { caption?: string; reply_markup?: ReplyMarkup } = {}): Promise<TgMessage | null> {
   try {
+    const token = getBotToken();
     const form = new FormData();
     form.append('chat_id', String(chat_id));
     form.append('parse_mode', 'HTML');
     if (opts.caption) form.append('caption', opts.caption);
     if (opts.reply_markup) form.append('reply_markup', JSON.stringify(opts.reply_markup));
     form.append('photo', new Blob([toArrayBuffer(photo)], { type: 'image/png' }), 'qr.png');
-    const res = await fetch(`${GATEWAY}/sendPhoto`, { method: 'POST', headers: headers(), body: form });
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendPhoto`, { method: 'POST', body: form });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || (data as { ok?: boolean }).ok === false) {
       console.warn('[tg] sendPhoto failed:', JSON.stringify(data).slice(0, 300));
@@ -103,12 +99,13 @@ export async function sendPhoto(chat_id: number | string, photo: Buffer | Uint8A
 
 export async function sendDocument(chat_id: number | string, buffer: Buffer | Uint8Array, filename: string, caption?: string): Promise<TgMessage | null> {
   try {
+    const token = getBotToken();
     const form = new FormData();
     form.append('chat_id', String(chat_id));
     form.append('parse_mode', 'HTML');
     if (caption) form.append('caption', caption);
     form.append('document', new Blob([toArrayBuffer(buffer)], { type: 'text/plain' }), filename);
-    const res = await fetch(`${GATEWAY}/sendDocument`, { method: 'POST', headers: headers(), body: form });
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendDocument`, { method: 'POST', body: form });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || (data as { ok?: boolean }).ok === false) {
       console.warn('[tg] sendDocument failed:', JSON.stringify(data).slice(0, 300));

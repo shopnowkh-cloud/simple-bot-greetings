@@ -1,7 +1,8 @@
 import { createServerFn } from '@tanstack/react-start';
+import { query } from '@/lib/db.server';
 
 const PUBLIC_URL =
-  process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
+  process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
 
 export const ADMIN_APP_BASE = PUBLIC_URL;
 
@@ -12,20 +13,20 @@ interface AuthResult {
 
 async function auth(token: string): Promise<AuthResult> {
   if (!token || typeof token !== 'string') throw new Error('Missing token');
-  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-  const { data, error } = await supabaseAdmin
-    .from('admin_tokens')
-    .select('telegram_id, expires_at')
-    .eq('token', token)
-    .maybeSingle();
-  if (error || !data) throw new Error('Invalid or expired token');
-  if (new Date(data.expires_at).getTime() < Date.now()) throw new Error('Token expired');
-  const tid = Number(data.telegram_id);
+  const result = await query<{ telegram_id: string; expires_at: string }>(
+    'SELECT telegram_id, expires_at FROM admin_tokens WHERE token = $1 LIMIT 1',
+    [token],
+  );
+  if (!result.rows.length) throw new Error('Invalid or expired token');
+  const row = result.rows[0];
+  if (new Date(row.expires_at).getTime() < Date.now()) throw new Error('Token expired');
+  const tid = Number(row.telegram_id);
   const primary = Number(process.env.ADMIN_ID || '5002402843');
   // Verify still admin (primary or in EXTRA_ADMIN_IDS settings)
-  const { data: state } = await supabaseAdmin
-    .from('bot_state').select('value').eq('key', 'db').maybeSingle();
-  const v = (state?.value ?? {}) as { settings?: Record<string, string> };
+  const stateResult = await query<{ value: unknown }>(
+    "SELECT value FROM bot_state WHERE key = 'db' LIMIT 1",
+  );
+  const v = (stateResult.rows[0]?.value ?? {}) as { settings?: Record<string, string> };
   let extras: number[] = [];
   try { extras = JSON.parse(v.settings?.EXTRA_ADMIN_IDS || '[]'); } catch { /* ignore */ }
   if (tid !== primary && !extras.map(Number).includes(tid)) throw new Error('Not an admin');
@@ -36,10 +37,10 @@ type AccountShape = { phone?: string; password?: string; code?: string; email?: 
 type PurchaseShape = { user_id: number; account_type: string; quantity: number; total_price: number; accounts: AccountShape[]; purchased_at: string };
 
 async function loadFullDB() {
-  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-  const { data } = await supabaseAdmin
-    .from('bot_state').select('value').eq('key', 'db').maybeSingle();
-  const v = (data?.value ?? {}) as Record<string, unknown>;
+  const result = await query<{ value: unknown }>(
+    "SELECT value FROM bot_state WHERE key = 'db' LIMIT 1",
+  );
+  const v = (result.rows[0]?.value ?? {}) as Record<string, unknown>;
   return {
     accounts: (v.accounts as { account_types: Record<string, AccountShape[]>; prices: Record<string, number> }) ?? { account_types: {}, prices: {} },
     sessions: (v.sessions as Record<string, unknown>) ?? {},
@@ -50,11 +51,12 @@ async function loadFullDB() {
 }
 
 async function saveFullDB(db: unknown) {
-  const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-  await supabaseAdmin
-    .from('bot_state')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .upsert({ key: 'db', value: db as any, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  await query(
+    `INSERT INTO bot_state (key, value, updated_at)
+     VALUES ('db', $1::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [JSON.stringify(db)],
+  );
 }
 
 export const getDashboard = createServerFn({ method: 'POST' })
