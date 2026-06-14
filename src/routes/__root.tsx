@@ -108,6 +108,7 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script src="https://telegram.org/js/telegram-web-app.js" />
       </head>
       <body>
         {children}
