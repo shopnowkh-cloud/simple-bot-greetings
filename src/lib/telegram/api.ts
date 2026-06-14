@@ -41,7 +41,7 @@ async function call<T = unknown>(method: string, payload: Record<string, unknown
 
 export type ReplyMarkup =
   | { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string; web_app?: { url: string } }>> }
-  | { keyboard: string[][]; resize_keyboard?: boolean; is_persistent?: boolean; one_time_keyboard?: boolean }
+  | { keyboard: Array<Array<string | { text: string; web_app?: { url: string } }>>; resize_keyboard?: boolean; is_persistent?: boolean; one_time_keyboard?: boolean }
   | { remove_keyboard: true }
   | undefined;
 
