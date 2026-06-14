@@ -542,6 +542,13 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   const text = (msg.text ?? '').trim();
   await notifyAdminNewUser(ctx, msg.from);
 
+  // /admin
+  if (text === '/admin') {
+    if (!isAdmin(ctx, uid)) return;
+    delete ctx.db.sessions[String(uid)];
+    return tg.sendMessage(chatId, '⚙️ <b>Admin Dashboard</b>\n\nចុចប៊ូតុងខាងក្រោមដើម្បីបើក Dashboard ។', await mainKb(ctx, uid));
+  }
+
   // /start
   if (text === '/start' || text.startsWith('/start ')) {
     if (ctx.MAINTENANCE_MODE && !isAdmin(ctx, uid)) {
@@ -701,8 +708,8 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
     return tg.sendMessage(chatId, '⏳ <b>សូមបញ្ចប់ការទូទាត់ QR ជាមុនសិន</b>\nឬចុច <b>🚫 បោះបង់</b> ដើម្បីបោះបង់', CHECK_PAYMENT_INLINE);
   }
   // Refresh persistent keyboard: admin gets the Mini App button, others get "💵 ទិញគូប៉ុង"
-  if (isAdmin(ctx, uid)) await tg.sendMessage(chatId, ' ', await mainKb(ctx, uid)).catch(() => {});
-  else await tg.sendMessage(chatId, ' ', MAIN_KB).catch(() => {});
+  if (isAdmin(ctx, uid)) await tg.sendMessage(chatId, '⚙️', await mainKb(ctx, uid)).catch(() => {});
+  else await tg.sendMessage(chatId, '💵', MAIN_KB).catch(() => {});
   await showAccountSelection(ctx, chatId);
 }
 
