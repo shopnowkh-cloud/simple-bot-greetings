@@ -54,7 +54,14 @@ async function buildAdminKb(uid: number): Promise<ReplyMarkup> {
   const base = process.env.PUBLIC_APP_URL || 'https://simple-bot-greetings.lovable.app';
   const url = `${base}/admin?token=${token}`;
   return {
-    keyboard: [[{ text: ADMIN_SETTINGS_BTN, web_app: { url } }]],
+    keyboard: [
+      [{ text: ADMIN_SETTINGS_BTN, web_app: { url } }],
+      [BTN_ADD_ACCOUNT, BTN_DELETE_TYPE],
+      [BTN_STOCK,       BTN_BUYERS],
+      [BTN_USERS,       BTN_KHPAY],
+      [BTN_CHANNEL,     BTN_ADMINS],
+      [BTN_BROADCAST,   BTN_MAINTENANCE],
+    ],
     resize_keyboard: true,
     is_persistent: true,
   };
