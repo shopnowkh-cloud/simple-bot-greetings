@@ -47,15 +47,9 @@ function loadCtx(db: BotDB): BotCtx {
 const isAdmin = (ctx: BotCtx, uid: number) =>
   Number(uid) === ctx.ADMIN_ID || ctx.EXTRA_ADMIN_IDS.has(Number(uid));
 
-async function buildAdminKb(uid: number): Promise<ReplyMarkup> {
-  const token = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-    .map((b) => b.toString(16).padStart(2, '0')).join('');
-  await query(
-    'INSERT INTO admin_tokens (token, telegram_id) VALUES ($1, $2)',
-    [token, uid],
-  );
+async function buildAdminKb(_uid: number): Promise<ReplyMarkup> {
   const base = process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
-  const url = `${base}/admin?token=${token}`;
+  const url = `${base}/admin`;
   return {
     keyboard: [
       [{ text: ADMIN_SETTINGS_BTN, web_app: { url } }],

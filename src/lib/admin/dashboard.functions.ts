@@ -1,14 +1,50 @@
 import { createServerFn } from '@tanstack/react-start';
 import { query } from '@/lib/db.server';
-
-const PUBLIC_URL =
-  process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
-
-export const ADMIN_APP_BASE = PUBLIC_URL;
+import { createHmac } from 'crypto';
 
 interface AuthResult {
   telegramId: number;
   isPrimary: boolean;
+}
+
+async function verifyInitData(initData: string): Promise<AuthResult> {
+  if (!initData || typeof initData !== 'string') throw new Error('Missing initData');
+  const TELEGRAM_API_KEY = process.env.TELEGRAM_API_KEY;
+  if (!TELEGRAM_API_KEY) throw new Error('Server misconfigured');
+
+  const params = new URLSearchParams(initData);
+  const hash = params.get('hash');
+  if (!hash) throw new Error('Missing hash in initData');
+  params.delete('hash');
+
+  const dataCheckString = Array.from(params.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n');
+
+  const secretKey = createHmac('sha256', 'WebAppData').update(TELEGRAM_API_KEY).digest();
+  const expectedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+  if (expectedHash !== hash) throw new Error('Unauthorized');
+
+  const authDate = Number(params.get('auth_date') ?? 0);
+  if (Date.now() / 1000 - authDate > 86400) throw new Error('initData expired');
+
+  const userJson = params.get('user');
+  if (!userJson) throw new Error('No user in initData');
+  const user = JSON.parse(userJson) as { id: number };
+  const tid = Number(user.id);
+
+  const primary = Number(process.env.ADMIN_ID);
+  const stateResult = await query<{ value: unknown }>(
+    "SELECT value FROM bot_state WHERE key = 'db' LIMIT 1",
+  );
+  const v = (stateResult.rows[0]?.value ?? {}) as { settings?: Record<string, string> };
+  let extras: number[] = [];
+  try { extras = JSON.parse(v.settings?.EXTRA_ADMIN_IDS || '[]'); } catch { /* ignore */ }
+  if (tid !== primary && !extras.map(Number).includes(tid)) throw new Error('Not an admin');
+
+  return { telegramId: tid, isPrimary: tid === primary };
 }
 
 async function auth(token: string): Promise<AuthResult> {
@@ -21,8 +57,7 @@ async function auth(token: string): Promise<AuthResult> {
   const row = result.rows[0];
   if (new Date(row.expires_at).getTime() < Date.now()) throw new Error('Token expired');
   const tid = Number(row.telegram_id);
-  const primary = Number(process.env.ADMIN_ID || '5002402843');
-  // Verify still admin (primary or in EXTRA_ADMIN_IDS settings)
+  const primary = Number(process.env.ADMIN_ID);
   const stateResult = await query<{ value: unknown }>(
     "SELECT value FROM bot_state WHERE key = 'db' LIMIT 1",
   );
@@ -58,6 +93,170 @@ async function saveFullDB(db: unknown) {
     [JSON.stringify(db)],
   );
 }
+
+async function buildDashboardPayload(db: Awaited<ReturnType<typeof loadFullDB>>, me: AuthResult) {
+  const purchases = db.purchases.slice().reverse();
+  const stock = Object.keys(db.accounts.account_types).map((t) => ({
+    type: t,
+    count: db.accounts.account_types[t].length,
+    price: db.accounts.prices[t] ?? 0,
+  }));
+  const totalRevenue = db.purchases.reduce((s, p) => s + (Number(p.total_price) || 0), 0);
+  const totalSold = db.purchases.reduce((s, p) => s + (Number(p.quantity) || 0), 0);
+  const now = Date.now();
+  const dayMs = 86_400_000;
+  const revToday = db.purchases.filter((p) => now - new Date(p.purchased_at).getTime() < dayMs)
+    .reduce((s, p) => s + (Number(p.total_price) || 0), 0);
+  const revWeek = db.purchases.filter((p) => now - new Date(p.purchased_at).getTime() < 7 * dayMs)
+    .reduce((s, p) => s + (Number(p.total_price) || 0), 0);
+  const revMonth = db.purchases.filter((p) => now - new Date(p.purchased_at).getTime() < 30 * dayMs)
+    .reduce((s, p) => s + (Number(p.total_price) || 0), 0);
+  return {
+    me: { telegramId: me.telegramId, isPrimary: me.isPrimary },
+    stats: {
+      userCount: Object.keys(db.users).length,
+      purchaseCount: db.purchases.length,
+      totalSold,
+      totalRevenue,
+      revToday,
+      revWeek,
+      revMonth,
+      stockTotal: stock.reduce((s, x) => s + x.count, 0),
+      pendingSessions: Object.values(db.sessions).filter((s) => (s as { state?: string }).state === 'payment_pending').length,
+    },
+    stock,
+    users: Object.entries(db.users).map(([uid, u]) => ({ telegram_id: Number(uid), ...u })),
+    purchases: purchases.slice(0, 200),
+    settings: {
+      CAMBO_API_TOKEN: db.settings.CAMBO_API_TOKEN ?? '',
+      TELEGRAM_CHANNEL_ID: db.settings.TELEGRAM_CHANNEL_ID ?? '',
+      MAINTENANCE_MODE: db.settings.MAINTENANCE_MODE === 'true',
+      EXTRA_ADMIN_IDS: db.settings.EXTRA_ADMIN_IDS ?? '[]',
+    },
+  };
+}
+
+export const getDashboardByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string }) => d)
+  .handler(async ({ data }) => {
+    const me = await verifyInitData(data.initData);
+    const db = await loadFullDB();
+    return buildDashboardPayload(db, me);
+  });
+
+export const addCouponsByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; type: string; price: number; rawText: string }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    const type = data.type.trim();
+    if (!type) throw new Error('Type required');
+    const price = Math.round(Number(data.price) * 10000) / 10000;
+    if (!isFinite(price) || price < 0) throw new Error('Invalid price');
+    const lines = data.rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) throw new Error('No coupons');
+    const db = await loadFullDB();
+    const existing = db.accounts.prices[type];
+    if (existing != null && Math.round(existing * 10000) !== Math.round(price * 10000)) {
+      throw new Error(`Type "${type}" already has price $${existing}. Use the same price.`);
+    }
+    const all = new Set(
+      Object.values(db.accounts.account_types).flat().map((a) =>
+        (a.code || a.email || a.phone || '').toLowerCase(),
+      ).filter(Boolean),
+    );
+    const accounts: AccountShape[] = lines.map((l) => {
+      if (l.includes('|')) {
+        const [ph, pw] = l.split('|').map((s) => s.trim());
+        return { phone: ph, password: pw };
+      }
+      return { code: l };
+    });
+    const toAdd = accounts.filter((a) => !all.has((a.code || a.phone || '').toLowerCase()));
+    if (!db.accounts.account_types[type]) db.accounts.account_types[type] = [];
+    db.accounts.account_types[type].push(...toAdd);
+    db.accounts.prices[type] = price;
+    await saveFullDB(db);
+    return { added: toAdd.length, duplicates: accounts.length - toAdd.length };
+  });
+
+export const deleteCouponTypeByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; type: string }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    const db = await loadFullDB();
+    const count = (db.accounts.account_types[data.type] ?? []).length;
+    delete db.accounts.account_types[data.type];
+    delete db.accounts.prices[data.type];
+    await saveFullDB(db);
+    return { ok: true, deleted: count };
+  });
+
+export const deleteOneCouponByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; type: string; index: number }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    const db = await loadFullDB();
+    const list = db.accounts.account_types[data.type];
+    if (!list) throw new Error('Type not found');
+    if (data.index < 0 || data.index >= list.length) throw new Error('Index out of range');
+    list.splice(data.index, 1);
+    await saveFullDB(db);
+    return { ok: true, remaining: list.length };
+  });
+
+export const listCouponsByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; type: string }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    const db = await loadFullDB();
+    const list = db.accounts.account_types[data.type] ?? [];
+    return { items: list };
+  });
+
+export const updateSettingsByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; cambo?: string; channel?: string; maintenance?: boolean }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    const db = await loadFullDB();
+    if (typeof data.cambo === 'string') db.settings.CAMBO_API_TOKEN = data.cambo;
+    if (typeof data.channel === 'string') db.settings.TELEGRAM_CHANNEL_ID = data.channel;
+    if (typeof data.maintenance === 'boolean') db.settings.MAINTENANCE_MODE = data.maintenance ? 'true' : 'false';
+    await saveFullDB(db);
+    return { ok: true };
+  });
+
+export const manageAdminByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; action: 'add' | 'remove'; telegramId: number }) => d)
+  .handler(async ({ data }) => {
+    const me = await verifyInitData(data.initData);
+    if (!me.isPrimary) throw new Error('Only primary admin can manage admins');
+    const db = await loadFullDB();
+    let extras: number[] = [];
+    try { extras = JSON.parse(db.settings.EXTRA_ADMIN_IDS || '[]'); } catch { /* ignore */ }
+    const set = new Set(extras.map(Number));
+    if (data.action === 'add') set.add(Number(data.telegramId));
+    else set.delete(Number(data.telegramId));
+    db.settings.EXTRA_ADMIN_IDS = JSON.stringify([...set]);
+    await saveFullDB(db);
+    return { ok: true, extras: [...set] };
+  });
+
+export const broadcastMessageByInitData = createServerFn({ method: 'POST' })
+  .inputValidator((d: { initData: string; text: string }) => d)
+  .handler(async ({ data }) => {
+    await verifyInitData(data.initData);
+    if (!data.text.trim()) throw new Error('Empty message');
+    const db = await loadFullDB();
+    const { sendMessage } = await import('@/lib/telegram/api');
+    const uids = Object.keys(db.users);
+    let sent = 0, failed = 0;
+    for (const u of uids) {
+      const r = await sendMessage(Number(u), data.text);
+      if (r) sent++; else failed++;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    return { total: uids.length, sent, failed };
+  });
 
 export const getDashboard = createServerFn({ method: 'POST' })
   .inputValidator((d: { token: string }) => d)

@@ -1,18 +1,18 @@
-import { createFileRoute, useSearch } from '@tanstack/react-router';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { createFileRoute } from '@tanstack/react-router';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import {
-  getDashboard, addCoupons, deleteCouponType, deleteOneCoupon, listCoupons,
-  updateSettings, manageAdmin, broadcastMessage,
+  getDashboardByInitData,
+  addCouponsByInitData,
+  deleteCouponTypeByInitData,
+  deleteOneCouponByInitData,
+  listCouponsByInitData,
+  updateSettingsByInitData,
+  manageAdminByInitData,
+  broadcastMessageByInitData,
 } from '@/lib/admin/dashboard.functions';
-import { z } from 'zod';
-
-const STORAGE_KEY = 'admin_dashboard_token';
-
-const searchSchema = z.object({ token: z.string().optional() });
 
 export const Route = createFileRoute('/admin')({
-  validateSearch: searchSchema,
   head: () => ({
     meta: [
       { title: 'Admin Dashboard' },
@@ -22,62 +22,55 @@ export const Route = createFileRoute('/admin')({
   component: AdminPage,
 });
 
-type Tab = 'stats' | 'users' | 'purchases' | 'stock' | 'settings';
+type Tab = 'stats' | 'stock' | 'purchases' | 'users' | 'settings';
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: { initData?: string; ready?: () => void; expand?: () => void } };
+  }
+}
+
+function getInitData(): string {
+  return window.Telegram?.WebApp?.initData ?? '';
+}
 
 function AdminPage() {
-  const search = useSearch({ from: '/admin' });
-  const [token, setToken] = useState<string | null>(null);
-  const [manualToken, setManualToken] = useState('');
+  const [initData, setInitData] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (search.token) {
-      localStorage.setItem(STORAGE_KEY, search.token);
-      setToken(search.token);
-      // strip token from URL
-      window.history.replaceState({}, '', '/admin');
-    } else {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setToken(stored);
+    const twa = window.Telegram?.WebApp;
+    if (twa) {
+      twa.ready?.();
+      twa.expand?.();
     }
-  }, [search.token]);
+    const id = getInitData();
+    setInitData(id);
+    setReady(true);
+  }, []);
 
-  if (!token) {
+  if (!ready) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400 text-sm">កំពុងផ្ទុក…</div>;
+  }
+
+  if (!initData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow p-6 space-y-4">
-          <h1 className="text-xl font-bold">🔐 Admin Login</h1>
-          <p className="text-sm text-slate-600">
-            Open your bot in Telegram and send <code className="bg-slate-100 px-1 rounded">/admin</code> — you'll get a magic link.
-          </p>
-          <p className="text-xs text-slate-500">ឬ​បិទភ្ជាប់ token ដោយ​ដៃ៖</p>
-          <input
-            value={manualToken}
-            onChange={(e) => setManualToken(e.target.value)}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="paste token"
-          />
-          <button
-            onClick={() => {
-              if (manualToken.trim()) {
-                localStorage.setItem(STORAGE_KEY, manualToken.trim());
-                setToken(manualToken.trim());
-              }
-            }}
-            className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm font-medium"
-          >
-            ចូល
-          </button>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white rounded-2xl shadow p-6 text-center space-y-2 max-w-xs w-full">
+          <p className="text-2xl">⚠️</p>
+          <p className="text-sm font-semibold text-slate-700">សូម​បើក​ Admin ពី Telegram</p>
+          <p className="text-xs text-slate-400">ផ្ញើ /admin ទៅ bot ដើម្បីបើក Dashboard</p>
         </div>
       </div>
     );
   }
 
-  return <Dashboard token={token} onLogout={() => { localStorage.removeItem(STORAGE_KEY); setToken(null); }} />;
+  return <Dashboard initData={initData} />;
 }
 
-function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const get = useServerFn(getDashboard);
-  const [data, setData] = useState<Awaited<ReturnType<typeof getDashboard>> | null>(null);
+function Dashboard({ initData }: { initData: string }) {
+  const get = useServerFn(getDashboardByInitData);
+  const [data, setData] = useState<Awaited<ReturnType<typeof getDashboardByInitData>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('stats');
   const [loading, setLoading] = useState(false);
@@ -86,30 +79,30 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     setLoading(true);
     setErr(null);
     try {
-      const d = await get({ data: { token } });
+      const d = await get({ data: { initData } });
       setData(d);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [get, token]);
+  }, [get, initData]);
 
   useEffect(() => { reload(); }, [reload]);
 
   if (err) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white rounded-2xl shadow p-6 space-y-3 max-w-md w-full">
-          <h2 className="font-bold text-red-600">⚠️ {err}</h2>
-          <button onClick={onLogout} className="w-full bg-slate-900 text-white rounded-lg px-3 py-2 text-sm">Logout</button>
+        <div className="bg-white rounded-2xl shadow p-6 space-y-3 max-w-md w-full text-center">
+          <p className="text-2xl">⚠️</p>
+          <p className="font-semibold text-red-600 text-sm">{err}</p>
         </div>
       </div>
     );
   }
 
   if (!data) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50">Loading…</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400 text-sm">កំពុងផ្ទុក…</div>;
   }
 
   return (
@@ -119,14 +112,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           <h1 className="text-base font-bold">Admin Dashboard</h1>
           <p className="text-[11px] text-slate-300">ID {data.me.telegramId}{data.me.isPrimary ? ' • primary' : ''}</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={reload} disabled={loading} className="text-xs bg-slate-700 px-2 py-1 rounded">{loading ? '...' : '↻'}</button>
-          <button onClick={onLogout} className="text-xs bg-red-600 px-2 py-1 rounded">Logout</button>
-        </div>
+        <button onClick={reload} disabled={loading} className="text-xs bg-slate-700 px-2 py-1 rounded">
+          {loading ? '...' : '↻'}
+        </button>
       </header>
 
-      <nav className="flex bg-white border-b sticky top-[60px] z-10 overflow-x-auto">
-        {(['stats','stock','purchases','users','settings'] as Tab[]).map((t) => (
+      <nav className="flex bg-white border-b sticky top-[52px] z-10 overflow-x-auto">
+        {(['stats', 'stock', 'purchases', 'users', 'settings'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -141,28 +133,28 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       </nav>
 
       <main className="p-4">
-        {tab === 'stats' && <StatsTab data={data} />}
-        {tab === 'stock' && <StockTab token={token} stock={data.stock} onChange={reload} />}
+        {tab === 'stats'     && <StatsTab data={data} />}
+        {tab === 'stock'     && <StockTab initData={initData} stock={data.stock} onChange={reload} />}
         {tab === 'purchases' && <PurchasesTab purchases={data.purchases} />}
-        {tab === 'users' && <UsersTab users={data.users} />}
-        {tab === 'settings' && <SettingsTab token={token} data={data} onChange={reload} />}
+        {tab === 'users'     && <UsersTab users={data.users} />}
+        {tab === 'settings'  && <SettingsTab initData={initData} data={data} onChange={reload} />}
       </main>
     </div>
   );
 }
 
-function StatsTab({ data }: { data: NonNullable<Awaited<ReturnType<typeof getDashboard>>> }) {
+function StatsTab({ data }: { data: NonNullable<Awaited<ReturnType<typeof getDashboardByInitData>>> }) {
   const s = data.stats;
   const cards = [
-    { label: 'ចំណូលសរុប', v: `$${s.totalRevenue.toFixed(2)}` },
-    { label: 'ថ្ងៃនេះ',   v: `$${s.revToday.toFixed(2)}` },
-    { label: '៧ ថ្ងៃ',    v: `$${s.revWeek.toFixed(2)}` },
-    { label: '៣០ ថ្ងៃ',   v: `$${s.revMonth.toFixed(2)}` },
-    { label: 'លក់ចេញ',   v: `${s.totalSold}` },
-    { label: 'ការទិញ',   v: `${s.purchaseCount}` },
-    { label: 'អ្នកប្រើ',  v: `${s.userCount}` },
+    { label: 'ចំណូលសរុប',  v: `$${s.totalRevenue.toFixed(2)}` },
+    { label: 'ថ្ងៃនេះ',    v: `$${s.revToday.toFixed(2)}` },
+    { label: '៧ ថ្ងៃ',     v: `$${s.revWeek.toFixed(2)}` },
+    { label: '៣០ ថ្ងៃ',    v: `$${s.revMonth.toFixed(2)}` },
+    { label: 'លក់ចេញ',    v: `${s.totalSold}` },
+    { label: 'ការទិញ',    v: `${s.purchaseCount}` },
+    { label: 'អ្នកប្រើ',   v: `${s.userCount}` },
     { label: 'ស្តុក​នៅ​សល់', v: `${s.stockTotal}` },
-    { label: 'រង់ចាំបង់', v: `${s.pendingSessions}` },
+    { label: 'រង់ចាំបង់',  v: `${s.pendingSessions}` },
   ];
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -176,20 +168,20 @@ function StatsTab({ data }: { data: NonNullable<Awaited<ReturnType<typeof getDas
   );
 }
 
-function StockTab({ token, stock, onChange }: { token: string; stock: { type: string; count: number; price: number }[]; onChange: () => void }) {
+function StockTab({ initData, stock, onChange }: { initData: string; stock: { type: string; count: number; price: number }[]; onChange: () => void }) {
   const [adding, setAdding] = useState(false);
   const [type, setType] = useState('');
   const [price, setPrice] = useState('');
   const [raw, setRaw] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const add = useServerFn(addCoupons);
-  const del = useServerFn(deleteCouponType);
+  const add = useServerFn(addCouponsByInitData);
+  const del = useServerFn(deleteCouponTypeByInitData);
 
   const submit = async () => {
     setBusy(true); setMsg(null);
     try {
-      const r = await add({ data: { token, type, price: parseFloat(price), rawText: raw } });
+      const r = await add({ data: { initData, type, price: parseFloat(price), rawText: raw } });
       setMsg(`✅ បាន​បន្ថែម ${r.added} (ដដែល ${r.duplicates})`);
       setType(''); setPrice(''); setRaw(''); setAdding(false);
       onChange();
@@ -202,10 +194,7 @@ function StockTab({ token, stock, onChange }: { token: string; stock: { type: st
 
   return (
     <div className="space-y-3">
-      <button
-        onClick={() => setAdding(!adding)}
-        className="w-full bg-slate-900 text-white rounded-xl py-2.5 text-sm font-medium"
-      >
+      <button onClick={() => setAdding(!adding)} className="w-full bg-slate-900 text-white rounded-xl py-2.5 text-sm font-medium">
         {adding ? '× បិទ' : '➕ បន្ថែម​គូប៉ុង'}
       </button>
       {adding && (
@@ -220,9 +209,9 @@ function StockTab({ token, stock, onChange }: { token: string; stock: { type: st
       <div className="space-y-2">
         {stock.length === 0 && <p className="text-center text-sm text-slate-500 py-8">មិន​មាន​ស្តុក</p>}
         {stock.map((s) => (
-          <StockRow key={s.type} item={s} token={token} onDelete={async () => {
+          <StockRow key={s.type} item={s} initData={initData} onDelete={async () => {
             if (!confirm(`លុប​ប្រភេទ "${s.type}" (${s.count} គូប៉ុង)?`)) return;
-            await del({ data: { token, type: s.type } });
+            await del({ data: { initData, type: s.type } });
             onChange();
           }} onChange={onChange} />
         ))}
@@ -231,15 +220,15 @@ function StockTab({ token, stock, onChange }: { token: string; stock: { type: st
   );
 }
 
-function StockRow({ item, token, onDelete, onChange }: { item: { type: string; count: number; price: number }; token: string; onDelete: () => void; onChange: () => void }) {
+function StockRow({ item, initData, onDelete, onChange }: { item: { type: string; count: number; price: number }; initData: string; onDelete: () => void; onChange: () => void }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<{ code?: string; email?: string; phone?: string; password?: string }[] | null>(null);
-  const list = useServerFn(listCoupons);
-  const delOne = useServerFn(deleteOneCoupon);
+  const listFn = useServerFn(listCouponsByInitData);
+  const delOne = useServerFn(deleteOneCouponByInitData);
 
   const toggle = async () => {
     if (!open) {
-      const r = await list({ data: { token, type: item.type } });
+      const r = await listFn({ data: { initData, type: item.type } });
       setItems(r.items);
     }
     setOpen(!open);
@@ -263,8 +252,8 @@ function StockRow({ item, token, onDelete, onChange }: { item: { type: string; c
               <button
                 onClick={async () => {
                   if (!confirm('លុប​គូប៉ុង​នេះ?')) return;
-                  await delOne({ data: { token, type: item.type, index: i } });
-                  const r = await list({ data: { token, type: item.type } });
+                  await delOne({ data: { initData, type: item.type, index: i } });
+                  const r = await listFn({ data: { initData, type: item.type } });
                   setItems(r.items);
                   onChange();
                 }}
@@ -278,7 +267,7 @@ function StockRow({ item, token, onDelete, onChange }: { item: { type: string; c
   );
 }
 
-function PurchasesTab({ purchases }: { purchases: NonNullable<Awaited<ReturnType<typeof getDashboard>>>['purchases'] }) {
+function PurchasesTab({ purchases }: { purchases: NonNullable<Awaited<ReturnType<typeof getDashboardByInitData>>>['purchases'] }) {
   if (!purchases.length) return <p className="text-center text-sm text-slate-500 py-8">មិន​មាន​ការទិញ</p>;
   return (
     <div className="space-y-2">
@@ -295,7 +284,7 @@ function PurchasesTab({ purchases }: { purchases: NonNullable<Awaited<ReturnType
   );
 }
 
-function UsersTab({ users }: { users: NonNullable<Awaited<ReturnType<typeof getDashboard>>>['users'] }) {
+function UsersTab({ users }: { users: NonNullable<Awaited<ReturnType<typeof getDashboardByInitData>>>['users'] }) {
   const [q, setQ] = useState('');
   const filtered = useMemo(() => {
     const s = q.toLowerCase().trim();
@@ -321,16 +310,16 @@ function UsersTab({ users }: { users: NonNullable<Awaited<ReturnType<typeof getD
   );
 }
 
-function SettingsTab({ token, data, onChange }: { token: string; data: NonNullable<Awaited<ReturnType<typeof getDashboard>>>; onChange: () => void }) {
+function SettingsTab({ initData, data, onChange }: { initData: string; data: NonNullable<Awaited<ReturnType<typeof getDashboardByInitData>>>; onChange: () => void }) {
   const [cambo, setCambo] = useState(data.settings.CAMBO_API_TOKEN);
   const [channel, setChannel] = useState(data.settings.TELEGRAM_CHANNEL_ID);
   const [maint, setMaint] = useState(data.settings.MAINTENANCE_MODE);
   const [bcast, setBcast] = useState('');
   const [newAdmin, setNewAdmin] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
-  const upd = useServerFn(updateSettings);
-  const man = useServerFn(manageAdmin);
-  const bc = useServerFn(broadcastMessage);
+  const upd = useServerFn(updateSettingsByInitData);
+  const man = useServerFn(manageAdminByInitData);
+  const bc = useServerFn(broadcastMessageByInitData);
 
   let extras: number[] = [];
   try { extras = JSON.parse(data.settings.EXTRA_ADMIN_IDS || '[]'); } catch { /* ignore */ }
@@ -350,7 +339,7 @@ function SettingsTab({ token, data, onChange }: { token: string; data: NonNullab
           onClick={async () => {
             setMsg(null);
             try {
-              await upd({ data: { token, cambo, channel, maintenance: maint } });
+              await upd({ data: { initData, cambo, channel, maintenance: maint } });
               setMsg('✅ បាន​រក្សា​ទុក'); onChange();
             } catch (e) { setMsg(`❌ ${(e as Error).message}`); }
           }}
@@ -368,7 +357,7 @@ function SettingsTab({ token, data, onChange }: { token: string; data: NonNullab
               <code className="text-xs">{id}</code>
               <button
                 onClick={async () => {
-                  await man({ data: { token, action: 'remove', telegramId: id } });
+                  await man({ data: { initData, action: 'remove', telegramId: id } });
                   onChange();
                 }}
                 className="text-xs text-red-600"
@@ -381,7 +370,7 @@ function SettingsTab({ token, data, onChange }: { token: string; data: NonNullab
               onClick={async () => {
                 const n = parseInt(newAdmin, 10);
                 if (!n) return;
-                await man({ data: { token, action: 'add', telegramId: n } });
+                await man({ data: { initData, action: 'add', telegramId: n } });
                 setNewAdmin('');
                 onChange();
               }}
@@ -398,7 +387,7 @@ function SettingsTab({ token, data, onChange }: { token: string; data: NonNullab
           onClick={async () => {
             if (!bcast.trim()) return;
             if (!confirm(`ផ្ញើ​សារ​ទៅ ${data.stats.userCount} នាក់?`)) return;
-            const r = await bc({ data: { token, text: bcast } });
+            const r = await bc({ data: { initData, text: bcast } });
             alert(`បាន​ផ្ញើ ${r.sent}/${r.total} · បរាជ័យ ${r.failed}`);
             setBcast('');
           }}
