@@ -550,6 +550,9 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
       return;
     }
     delete ctx.db.sessions[String(uid)];
+    if (isAdmin(ctx, uid)) {
+      await tg.sendMessage(chatId, '👋 <b>សួស្ដី Admin</b>\n\nចុចប៊ូតុង <b>⚙️កំណត់</b> ដើម្បីបើក Mini App Dashboard។', await mainKb(ctx, uid));
+    }
     await showAccountSelection(ctx, chatId);
     return;
   }
@@ -694,8 +697,9 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   if (ctx.db.sessions[String(uid)]?.state === 'payment_pending') {
     return tg.sendMessage(chatId, '⏳ <b>សូមបញ្ចប់ការទូទាត់ QR ជាមុនសិន</b>\nឬចុច <b>🚫 បោះបង់</b> ដើម្បីបោះបង់', CHECK_PAYMENT_INLINE);
   }
-  // Use MAIN_KB to give non-admin users the "💵 ទិញគូប៉ុង" button on first interaction
-  if (!isAdmin(ctx, uid)) await tg.sendMessage(chatId, ' ', MAIN_KB).catch(() => {});
+  // Refresh persistent keyboard: admin gets the Mini App button, others get "💵 ទិញគូប៉ុង"
+  if (isAdmin(ctx, uid)) await tg.sendMessage(chatId, ' ', await mainKb(ctx, uid)).catch(() => {});
+  else await tg.sendMessage(chatId, ' ', MAIN_KB).catch(() => {});
   await showAccountSelection(ctx, chatId);
 }
 
