@@ -40,7 +40,7 @@ async function call<T = unknown>(method: string, payload: Record<string, unknown
 }
 
 export type ReplyMarkup =
-  | { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> }
+  | { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string; web_app?: { url: string } }>> }
   | { keyboard: string[][]; resize_keyboard?: boolean; is_persistent?: boolean; one_time_keyboard?: boolean }
   | { remove_keyboard: true }
   | undefined;
@@ -66,7 +66,7 @@ export function deleteMessage(chat_id: number | string, message_id: number) {
   return call('deleteMessage', { chat_id, message_id });
 }
 
-export function editMessageText(chat_id: number | string, message_id: number, text: string, reply_markup?: { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> }) {
+export function editMessageText(chat_id: number | string, message_id: number, text: string, reply_markup?: { inline_keyboard: Array<Array<{ text: string; callback_data?: string; url?: string; web_app?: { url: string } }>> }) {
   return call<TgMessage>('editMessageText', {
     chat_id,
     message_id,
