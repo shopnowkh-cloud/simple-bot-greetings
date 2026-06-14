@@ -48,8 +48,11 @@ const isAdmin = (ctx: BotCtx, uid: number) =>
   Number(uid) === ctx.ADMIN_ID || ctx.EXTRA_ADMIN_IDS.has(Number(uid));
 
 async function buildAdminKb(_uid: number): Promise<ReplyMarkup> {
+  const base = process.env.PUBLIC_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost:5000'}`;
+  const url = `${base}/admin`;
   return {
     keyboard: [
+      [{ text: '📊 Admin Dashboard', web_app: { url } }],
       [BTN_ADD_ACCOUNT, BTN_DELETE_TYPE],
       [BTN_STOCK,       BTN_BUYERS],
       [BTN_USERS,       BTN_KHPAY],
