@@ -4,10 +4,11 @@ let _sql: ReturnType<typeof postgres> | undefined;
 
 function getSql() {
   if (!_sql) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL must be set.');
+    const url = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error('SUPABASE_DB_URL or DATABASE_URL must be set.');
     }
-    _sql = postgres(process.env.DATABASE_URL, {
+    _sql = postgres(url, {
       prepare: false,
       max: 1,
       idle_timeout: 20,
