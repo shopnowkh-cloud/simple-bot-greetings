@@ -1,23 +1,27 @@
-import pg from 'pg';
+import postgres from 'postgres';
 
-const { Pool } = pg;
+let _sql: ReturnType<typeof postgres> | undefined;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL must be set.');
-}
-
-let _pool: pg.Pool | undefined;
-
-export function getPool(): pg.Pool {
-  if (!_pool) {
-    _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+function getSql() {
+  if (!_sql) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL must be set.');
+    }
+    _sql = postgres(process.env.DATABASE_URL, {
+      prepare: false,
+      max: 1,
+      idle_timeout: 20,
+    });
   }
-  return _pool;
+  return _sql;
 }
 
-export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
-  sql: string,
-  params?: unknown[],
-): Promise<pg.QueryResult<T>> {
-  return getPool().query<T>(sql, params);
+export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params: unknown[] = [],
+): Promise<{ rows: T[]; rowCount: number }> {
+  const sql = getSql();
+  const result = await sql.unsafe(text, params as never[]);
+  const rows = result as unknown as T[];
+  return { rows, rowCount: rows.length };
 }
