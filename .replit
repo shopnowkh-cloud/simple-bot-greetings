@@ -1,4 +1,4 @@
-modules = ["web", "nodejs-22", "postgresql-16", "python-3.11"]
+modules = ["nodejs-20", "python-3.11"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -29,7 +29,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py"
+args = "uvicorn main:app --host 0.0.0.0 --port 5000"
 waitForPort = 5000
 
 [[ports]]

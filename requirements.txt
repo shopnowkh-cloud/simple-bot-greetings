@@ -3,3 +3,10 @@ asyncpg>=0.31.0
 httpx>=0.28.1
 qrcode>=8.2
 Pillow>=12.2.0
+asyncpg
+fastapi
+httpx
+pillow
+python-dotenv
+qrcode
+uvicorn
