@@ -1,9 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from './types';
-
-const url = process.env.SUPABASE_URL!;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-export const supabaseAdmin = createClient<Database>(url, serviceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+// Supabase has been replaced with Replit's built-in PostgreSQL.
+// This file is kept as a stub to avoid breaking any imports.
+export const supabaseAdmin = {} as never;
