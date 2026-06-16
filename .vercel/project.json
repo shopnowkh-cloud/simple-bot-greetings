@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_kzrVFv3VJe3QPIvcAYUgLYDvi8uh",
+  "orgId": "GUzA2Du7pG0LFA17FWYmdcgD",
+  "projectName": "khmer-telegram-bot",
+  "settings": {
+    "createdAt": 1781628157534,
+    "framework": null,
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
