@@ -907,9 +907,29 @@ async def handle_cron_request() -> dict:
 
 # ============= FastAPI App =============
 
+async def init_db() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS bot_state (
+                key        TEXT PRIMARY KEY,
+                value      JSONB        NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+            );
+            CREATE TABLE IF NOT EXISTS telegram_updates (
+                update_id    BIGINT      PRIMARY KEY,
+                processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE TABLE IF NOT EXISTS admin_tokens (
+                token      TEXT        PRIMARY KEY,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+        """)
+    print("[DB] Tables ready.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await get_pool()
+    await init_db()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -930,6 +950,29 @@ async def telegram_cron():
         return JSONResponse(content=result["body"], status_code=result["status"])
     except Exception as e:
         return JSONResponse(content={"ok": False, "error": str(e)}, status_code=500)
+
+@app.get("/api/setup-webhook")
+async def setup_webhook(request: Request):
+    api_key = os.environ.get("TELEGRAM_API_KEY")
+    if not api_key:
+        return JSONResponse({"ok": False, "error": "TELEGRAM_API_KEY not set"}, status_code=500)
+    base_url = str(request.base_url).rstrip("/")
+    webhook_url = f"{base_url}/api/webhook"
+    secret = _derive_webhook_secret(api_key)
+    payload = {
+        "url": webhook_url,
+        "secret_token": secret,
+        "allowed_updates": ["message", "callback_query", "channel_post"],
+    }
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(
+            f"https://api.telegram.org/bot{api_key}/setWebhook",
+            json=payload,
+        )
+        data = res.json()
+    if data.get("ok"):
+        return JSONResponse({"ok": True, "webhook_url": webhook_url, "telegram": data})
+    return JSONResponse({"ok": False, "telegram": data}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn
