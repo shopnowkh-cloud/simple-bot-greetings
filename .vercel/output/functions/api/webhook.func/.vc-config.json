@@ -1,12 +1,6 @@
 {
-  "handler": "api/webhook.js",
-  "runtime": "nodejs24.x",
-  "architecture": "x86_64",
-  "maxDuration": 60,
-  "environment": {},
-  "shouldDisableAutomaticFetchInstrumentation": false,
+  "runtime": "nodejs22.x",
+  "handler": "index.mjs",
   "launcherType": "Nodejs",
-  "shouldAddHelpers": true,
-  "shouldAddSourcemapSupport": true,
-  "awsLambdaHandler": ""
+  "shouldAddHelpers": true
 }

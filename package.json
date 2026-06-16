@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "deploy": "vercel build --prod && vercel deploy --prebuilt --prod",
+    "deploy": "vercel build --prod && node scripts/build-api.mjs && vercel deploy --prebuilt --prod",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -78,6 +78,7 @@
     "@types/react-dom": "^19.2.3",
     "@vercel/node": "^5.8.17",
     "@vitejs/plugin-react": "^5.2.0",
+    "esbuild": "^0.28.1",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
