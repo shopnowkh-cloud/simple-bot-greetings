@@ -914,34 +914,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    return """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Telegram Bot</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fcfbf8;display:flex;align-items:center;justify-content:center;min-height:100vh}
-    .card{background:white;border-radius:16px;padding:40px 48px;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;max-width:420px;width:90%}
-    .icon{font-size:52px;margin-bottom:16px}
-    h1{font-size:24px;color:#1a1a1a;margin-bottom:8px}
-    p{font-size:15px;color:#666;line-height:1.6}
-    .badge{display:inline-block;margin-top:20px;background:#e8f5e9;color:#2e7d32;border-radius:999px;padding:6px 18px;font-size:13px;font-weight:600}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">🤖</div>
-    <h1>Telegram Bot</h1>
-    <p>Coupon selling bot with KhPay payment integration.<br/>Webhook and cron endpoints are active.</p>
-    <div class="badge">✅ Server running</div>
-  </div>
-</body>
-</html>"""
-
 @app.post("/api/public/telegram/webhook")
 @app.post("/api/webhook")
 async def telegram_webhook(request: Request):
