@@ -1,6 +1,23 @@
 import QRCode from 'qrcode';
-import { createHash } from 'crypto';
-import { query } from '@/lib/db.server';
+import { createHash, timingSafeEqual } from 'crypto';
+import { Pool } from 'pg';
+
+// ============= Database =============
+
+const _pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+async function query<T extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params: unknown[] = [],
+): Promise<{ rows: T[]; rowCount: number }> {
+  const client = await _pool.connect();
+  try {
+    const result = await client.query(text, params);
+    return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
+  } finally {
+    client.release();
+  }
+}
 
 // ============= Telegram API (api.ts) =============
 
@@ -1274,4 +1291,55 @@ async function handleChannelPost(ctx: BotCtx, post: TgMsg) {
   } catch (e) {
     console.warn('[EGets] channel_post error:', (e as Error).message);
   }
+}
+
+// ============= HTTP Handlers =============
+
+function _deriveWebhookSecret(apiKey: string): string {
+  return createHash('sha256').update(`telegram-webhook:${apiKey}`).digest('base64url');
+}
+function _safeEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+export async function handleWebhookRequest(request: Request): Promise<Response> {
+  const TELEGRAM_API_KEY = process.env.TELEGRAM_API_KEY;
+  if (!TELEGRAM_API_KEY) return new Response('Server misconfigured', { status: 500 });
+  const expected = _deriveWebhookSecret(TELEGRAM_API_KEY);
+  const actual = request.headers.get('X-Telegram-Bot-Api-Secret-Token') ?? '';
+  if (!_safeEqual(actual, expected)) return new Response('Unauthorized', { status: 401 });
+  let update: { update_id?: number };
+  try { update = await request.json(); } catch { return new Response('Bad request', { status: 400 }); }
+  if (typeof update.update_id !== 'number') return Response.json({ ok: true, ignored: true });
+  const work = (async () => {
+    try {
+      const [fresh, db] = await Promise.all([markUpdateProcessed(update.update_id!), loadDB()]);
+      if (!fresh) return;
+      await handleUpdate(update as Parameters<typeof handleUpdate>[0], db);
+      runWatchdog().catch(() => {});
+    } catch (e) {
+      console.warn('[webhook] bg error:', (e as Error).message);
+    }
+  })();
+  const wu = (globalThis as unknown as { __waitUntil?: (p: Promise<unknown>) => void }).__waitUntil;
+  if (wu) { wu(work); return Response.json({ ok: true }); }
+  await work;
+  return Response.json({ ok: true });
+}
+
+export async function handleCronRequest(): Promise<Response> {
+  const maxMs = 59_000, intervalMs = 500;
+  const start = Date.now();
+  let runs = 0;
+  while (Date.now() - start < maxMs) {
+    try { await runWatchdog(); } catch (e) {
+      console.warn('[cron] watchdog error:', (e as Error).message);
+    }
+    runs++;
+    if (Date.now() - start + intervalMs >= maxMs) break;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return Response.json({ ok: true, runs });
 }
