@@ -1,24 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.12"
-      }
-    }
-  ],
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/public/telegram/cron",
-      "schedule": "* * * * *"
-    }
+    { "source": "/(.*)", "destination": "/api/index" }
   ]
 }
