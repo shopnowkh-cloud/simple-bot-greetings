@@ -929,7 +929,10 @@ async def init_db() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        print(f"[startup] DB init warning: {e}")
     yield
 
 app = FastAPI(lifespan=lifespan)
