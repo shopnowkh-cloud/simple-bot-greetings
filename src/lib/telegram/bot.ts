@@ -936,12 +936,6 @@ async function handleMessage(ctx: BotCtx, msg: TgMsg) {
   const text = (msg.text ?? '').trim();
   await notifyAdminNewUser(ctx, msg.from);
 
-  if (text === '/admin') {
-    if (!isAdmin(ctx, uid)) return;
-    delete ctx.db.sessions[String(uid)];
-    return sendMessage(chatId, '⚙️ <b>Admin Panel</b>', await mainKb(ctx, uid));
-  }
-
   if (text === '/start' || text.startsWith('/start ')) {
     if (ctx.MAINTENANCE_MODE && !isAdmin(ctx, uid)) {
       await sendMessage(chatId, '🔧 <b>Bot កំពុង Update សូមរង់ចាំមួយភ្លែត...</b>');
