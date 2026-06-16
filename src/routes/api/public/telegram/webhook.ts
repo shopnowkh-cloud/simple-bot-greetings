@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { createHash, timingSafeEqual } from 'crypto';
-import { handleUpdate, runWatchdog } from '@/lib/telegram/bot';
-import { markUpdateProcessed, loadDB } from '@/lib/telegram/state';
+import { handleUpdate, runWatchdog, markUpdateProcessed, loadDB } from '@/lib/telegram/bot';
 
 function deriveSecret(apiKey: string): string {
   return createHash('sha256').update(`telegram-webhook:${apiKey}`).digest('base64url');
