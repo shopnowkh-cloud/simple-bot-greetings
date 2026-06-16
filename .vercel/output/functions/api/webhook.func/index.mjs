@@ -10921,19 +10921,26 @@ async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  const body = req.body ?? {};
+  console.log("[webhook] update_id:", body?.update_id, "| has msg:", !!body?.message);
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     if (v) headers.set(k, Array.isArray(v) ? v[0] : v);
   }
-  const body = JSON.stringify(req.body);
   const request = new Request("https://placeholder/api/webhook", {
     method: "POST",
     headers,
-    body
+    body: JSON.stringify(body)
   });
-  const response = await handleWebhookRequest(request);
-  const data = await response.json().catch(() => ({ ok: true }));
-  return res.status(response.status).json(data);
+  try {
+    const response = await handleWebhookRequest(request);
+    const data = await response.json().catch(() => ({ ok: true }));
+    console.log("[webhook] done, status:", response.status);
+    return res.status(response.status).json(data);
+  } catch (e) {
+    console.error("[webhook] unhandled error:", e.message);
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 }
 export {
   handler as default

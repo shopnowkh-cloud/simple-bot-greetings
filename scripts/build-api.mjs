@@ -31,6 +31,7 @@ for (const { entry, name } of funcs) {
     handler: 'index.mjs',
     launcherType: 'Nodejs',
     shouldAddHelpers: true,
+    maxDuration: 60,
   }, null, 2));
 
   console.log(`✅ Bundled ${name} → ${outDir}/index.mjs`);
